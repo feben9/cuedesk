@@ -1,5 +1,7 @@
 # Cue
 
+[![ci](https://github.com/feben9/cuedesk/actions/workflows/ci.yml/badge.svg)](https://github.com/feben9/cuedesk/actions/workflows/ci.yml)
+
 A local-first chief of staff for one person who runs many AI agent sessions and a ticket board.
 
 Cue keeps one queue of what needs you, watches your board for work that has gone quiet, and stops two sessions from using the same device or environment at once. It runs on your machine, listens on `127.0.0.1` only, and stores everything in one SQLite file.
@@ -22,9 +24,20 @@ When you run five agent sessions at once, plus a board, plus people asking you t
 
 ## Screenshots
 
-_Screenshots coming soon: Needs you, Now, Board watch, Since you left (light and dark)._
+From `cuedesk --demo`: a made-up shop, three agent sessions, one test phone and a small board.
 
-<!-- docs/screenshots/needs-you.png, now.png, board-watch.png, since.png -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/needs-you.png">
+  <img alt="Needs you: a ranked list of what the sessions and the board need from you" src="docs/screenshots/needs-you-light.png">
+</picture>
+
+| Now | Board watch |
+|---|---|
+| ![Sessions, what each is doing, and who holds each shared device](docs/screenshots/now.png) | ![Board items by stage, with stale ones highlighted](docs/screenshots/board-watch.png) |
+
+| Since you left | Phone width |
+|---|---|
+| ![A summary and timeline of everything since a chosen time](docs/screenshots/since.png) | <img alt="Needs you on a phone" src="docs/screenshots/phone.png" width="260"> |
 
 ## Quick start
 
@@ -101,6 +114,8 @@ cuedesk hooks install --write ~/.claude/settings.json   # merges it in, keeps a 
 ```
 
 Paste the printed `hooks` block into your Claude Code settings (`~/.claude/settings.json` for all projects, or `.claude/settings.json` in one repo), or use `--write` with the file you choose. Each hook pipes its JSON to `POST /api/hooks/claude` with `curl`, gives up after 3 seconds and never fails, so a stopped Cue never blocks Claude Code.
+
+Checked with a real Claude Code session (v2.1): starting a session, a permission prompt (it shows up in Needs you as an approval within a second), finishing a turn, and ending the session all reach Cue. Declining the prompt in the terminal closes the card on its own.
 
 | Hook | What Cue does |
 |---|---|
