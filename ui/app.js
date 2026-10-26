@@ -74,7 +74,7 @@
   }
 
   function full(isoText) {
-    return isoText ? new Date(isoText).toLocaleString() : '';
+    return isoText ? new Date(isoText).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
   }
 
   function toast(message, isError) {
@@ -193,11 +193,13 @@
   function card(e, rank) {
     var li = h('li', { class: 'card type-' + e.type + ' sev-' + e.severity });
     if (rank) li.appendChild(h('span', { class: 'rank', title: 'Rank in whats_next' }, '#' + rank));
+    // Tags the "why" chip already names ("tagged dev") aren't shown twice.
+    var namedTags = /^tagged /.test(e.why) ? e.why.slice(7).toLowerCase().split(', ') : [];
     var chips = h('div', { class: 'row chips-row' },
       h('span', { class: 'chip ' + (e.severity === 'urgent' ? 'urgent' : e.type === 'ask' ? 'ask' : e.severity) }, kindLabel(e)),
       e.severity === 'urgent' ? h('span', { class: 'chip urgent' }, e.overdue ? 'Overdue' : 'Urgent') : null,
       h('span', { class: 'chip why', title: 'Why it is here' }, e.why),
-      (e.tags || []).map(function (t) { return h('span', { class: 'chip' }, '#' + t); }),
+      (e.tags || []).filter(function (t) { return namedTags.indexOf(t.toLowerCase()) < 0; }).map(function (t) { return h('span', { class: 'chip' }, '#' + t); }),
     );
     li.appendChild(chips);
     li.appendChild(h('div', { class: 'title' }, e.title));
@@ -214,7 +216,6 @@
       if (e.origin === 'hook') meta.push('answer it in that terminal; Cue clears this when the session moves on');
     } else {
       meta.push('raised ' + ago(e.createdAt) + ' (' + clock(e.createdAt) + ')');
-      meta.push('rule ' + e.ruleId);
     }
     li.appendChild(h('div', { class: 'meta', title: full(e.createdAt) }, meta.join(' · ')));
 
@@ -329,9 +330,9 @@
       inStage.forEach(function (i) {
         var sev = i.stale ? ' stale sev-' + i.stale.severity : '';
         ul.appendChild(h('li', { class: 'item' + sev },
-          h('div', { class: 'iid' }, i.id + ' · ' + i.source),
+          h('div', { class: 'iid' }, i.id + (state.sources.length > 1 ? ' · ' + i.source : '')),
           i.url ? h('a', { class: 'ititle', href: i.url, target: '_blank', rel: 'noopener noreferrer' }, i.title) : h('span', { class: 'ititle' }, i.title),
-          h('div', { class: 'meta', title: 'Updated ' + full(i.updatedAt) }, i.status + (i.assignee ? ' · ' + i.assignee : '') + ' · updated ' + ago(i.updatedAt)),
+          h('div', { class: 'meta', title: 'Updated ' + full(i.updatedAt) }, i.status + (i.assignee ? ' · ' + i.assignee : '') + (i.stale ? '' : ' · updated ' + ago(i.updatedAt))),
           i.stale ? h('div', { class: 'stale-note' }, 'Stale: no update for ' + i.idleFor) : null,
         ));
       });
@@ -385,6 +386,15 @@
       .catch(function (err) { toast(err.message, true); });
   }
 
+  var EVENT_LABELS = { ask: ['ask', 'Ask'], signal: ['warn', 'Signal'], item: ['', 'Board'], source: ['', 'Board'], session: ['', 'Session'], claim: ['', 'Resource'], progress: ['ok', 'Progress'] };
+
+  function eventChip(type) {
+    var m = EVENT_LABELS[type.split('.')[0]] || ['', type];
+    if (type === 'signal.fired' || type === 'source.error') m = ['warn', m[1]];
+    if (type === 'signal.resolved' || type === 'signal.dismissed') m = ['', 'Signal'];
+    return h('span', { class: 'chip ' + m[0], title: type }, m[1]);
+  }
+
   function renderBrief(b) {
     var box = clear($('brief'));
     box.appendChild(h('p', { class: 'headline' }, b.headline));
@@ -400,7 +410,7 @@
         ol.appendChild(h('li', { class: 'day' }, day));
         lastDay = day;
       }
-      ol.appendChild(h('li', null, h('span', { class: 'when', title: full(e.ts) }, clock(e.ts)), h('span', { class: 'chip' }, e.type), ' ', e.summary));
+      ol.appendChild(h('li', null, h('span', { class: 'when', title: full(e.ts) }, clock(e.ts)), eventChip(e.type), ' ', e.summary));
     });
     box.appendChild(ol);
   }
