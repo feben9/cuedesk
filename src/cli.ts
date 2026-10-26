@@ -5,6 +5,7 @@ import { ConfigError, DEFAULT_PORT, loadConfig, type CueConfig } from './config/
 import { Cue } from './cue.ts';
 import { DemoBoard, demoConfig, runDemo, seedDemo } from './demo/index.ts';
 import { HOOK_EVENTS, hooksSnippet, writeHooks } from './ingest/install.ts';
+import { Notifier } from './notify/index.ts';
 import { startServer } from './server/index.ts';
 import { VERSION } from './version.ts';
 
@@ -14,6 +15,7 @@ Usage
   cuedesk [--config <path>] [--port <n>] [--db <path>]   start Cue with a config file
   cuedesk --demo [--port <n>]                            start with a fake project, no accounts needed
   cuedesk hooks install [--port <n>] [--write <path>]    print (or merge) the Claude Code hooks snippet
+  cuedesk notify test [--config <path>]                  send one test alert to your phone (needs "notify" in the config)
   cuedesk --help | --version
 
 Options
@@ -28,7 +30,7 @@ Cue listens on 127.0.0.1 only. UI at http://127.0.0.1:<port>, MCP at /mcp, JSON 
 `;
 
 interface Args {
-  command: 'serve' | 'hooks-install' | 'help' | 'version';
+  command: 'serve' | 'hooks-install' | 'notify-test' | 'help' | 'version';
   config?: string;
   port?: number;
   db?: string;
@@ -42,6 +44,10 @@ export function parseArgs(argv: string[]): Args {
   if (rest[0] === 'hooks') {
     if (rest[1] !== 'install') throw new Error('unknown hooks command; use "cuedesk hooks install"');
     args.command = 'hooks-install';
+    rest.splice(0, 2);
+  } else if (rest[0] === 'notify') {
+    if (rest[1] !== 'test') throw new Error('unknown notify command; use "cuedesk notify test"');
+    args.command = 'notify-test';
     rest.splice(0, 2);
   }
   const value = (flag: string): string => {
@@ -179,6 +185,7 @@ async function serve(args: Args): Promise<number> {
       `  API   ${server.url}/api/whats_next`,
       `  Data  ${config.db === ':memory:' ? 'in memory (gone when Cue stops)' : config.db}`,
       config.sources.length ? `  Sources  ${config.sources.map((s) => s.name).join(', ')} (every ${config.pollMinutes} min)` : '',
+      cue.notifier ? `  Alerts ${cue.notifier.describe()}` : '',
       'Press Ctrl+C to stop.',
       '',
     ]
@@ -203,6 +210,29 @@ async function serve(args: Args): Promise<number> {
   return 0;
 }
 
+/** Sends one test alert with the config's "notify" settings, so you know your phone gets them. */
+async function notifyTest(args: Args): Promise<number> {
+  const config = loadConfig(args.config ?? 'cue.config.yaml');
+  if (!config.notify) {
+    process.stderr.write('There is no "notify" section in the config. See "Phone alerts" in the README.\n');
+    return 1;
+  }
+  const notifier = new Notifier(config.notify, {
+    project: config.project,
+    quietHours: config.quietHours,
+    now: () => Date.now(),
+    log: (msg) => process.stderr.write(`${msg}\n`),
+  });
+  const ok = await notifier.send({
+    title: `Cue · ${config.project}`,
+    message: 'Test alert from Cue. If this is on your phone, alerts work.',
+    priority: 3,
+    tags: ['white_check_mark'],
+  });
+  process.stdout.write(ok ? `Sent a test alert via ${notifier.describe()}.\n` : 'The test alert was not sent.\n');
+  return ok ? 0 : 1;
+}
+
 export async function main(argv: string[]): Promise<number> {
   let args: Args;
   try {
@@ -221,6 +251,7 @@ export async function main(argv: string[]): Promise<number> {
       return 0;
     }
     if (args.command === 'hooks-install') return hooksInstall(args);
+    if (args.command === 'notify-test') return await notifyTest(args);
     return await serve(args);
   } catch (err) {
     if (err instanceof ConfigError) {

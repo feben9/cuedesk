@@ -186,6 +186,7 @@ export function ingestClaudeHook(cue: Cue, body: unknown): HookResult {
       const ask = store.createAsk({ summary, details, kind, sessionId: id, askedBy: session.label, origin: 'hook' });
       store.setSessionState(id, 'waiting', summary);
       store.addEvent({ type: 'ask.created', sessionId: id, subjectType: 'ask', subjectId: ask.id, summary: `${session.label} is waiting: ${summary}` });
+      cue.announceAsk(ask);
       cue.evaluate();
       return { ...base, askId: ask.id };
     }

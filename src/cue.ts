@@ -5,6 +5,7 @@ import type { FetchLike } from './sources/github.ts';
 import { evaluateRules, type RulesResult } from './rules/index.ts';
 import { whatsNext, type WhatsNext } from './ranking/index.ts';
 import { buildBrief, type Brief } from './brief/index.ts';
+import { Notifier, type PostLike } from './notify/index.ts';
 import { formatDuration, iso, MINUTE, systemClock, type Clock } from './util/time.ts';
 import { truncate } from './util/misc.ts';
 
@@ -45,6 +46,10 @@ export interface CueOptions {
   env?: Record<string, string | undefined>;
   /** How often rules run. Default 30 s. */
   rulesIntervalMs?: number;
+  /** Sends phone alerts; tests pass a fake. Default: fetch. */
+  post?: PostLike;
+  /** Pause before retrying a failed alert. Default 2 s. */
+  alertRetryDelayMs?: number;
   log?: (msg: string) => void;
 }
 
@@ -59,6 +64,8 @@ export class Cue {
   readonly config: CueConfig;
   readonly sources: Source[];
   readonly sourceStatus = new Map<string, SourceStatus>();
+  /** Phone alerts, when "notify" is configured. */
+  readonly notifier: Notifier | null;
   private readonly rulesIntervalMs: number;
   private readonly log: (msg: string) => void;
   private timers: NodeJS.Timeout[] = [];
@@ -71,6 +78,17 @@ export class Cue {
     this.sources = opts.sources ?? opts.config.sources.map((s) => createSource(s, { fetch: opts.fetch, env: opts.env }));
     this.rulesIntervalMs = opts.rulesIntervalMs ?? 30_000;
     this.log = opts.log ?? (() => undefined);
+    this.notifier = opts.config.notify
+      ? new Notifier(opts.config.notify, {
+          project: opts.config.project,
+          quietHours: opts.config.quietHours,
+          now: () => this.now(),
+          post: opts.post,
+          env: opts.env,
+          log: this.log,
+          retryDelayMs: opts.alertRetryDelayMs,
+        })
+      : null;
     for (const r of opts.config.resources) this.store.upsertResource(r);
     for (const s of this.sources) {
       this.sourceStatus.set(s.name, { name: s.name, type: s.type, lastSync: null, ok: null, error: null, count: 0 });
@@ -105,6 +123,7 @@ export class Cue {
     this.timers = [];
     await this.syncing?.catch(() => undefined);
     await Promise.all(this.sources.map((s) => s.close?.().catch(() => undefined)));
+    await this.notifier?.idle();
   }
 
   /** Reads every source once. Concurrent calls share one run. */
@@ -134,7 +153,14 @@ export class Cue {
   }
 
   evaluate(): RulesResult {
-    return evaluateRules(this.store, this.config.rules);
+    const result = evaluateRules(this.store, this.config.rules);
+    for (const s of result.fired) void this.notifier?.signalFired(s);
+    return result;
+  }
+
+  /** Tells the phone about a new ask, if alerts for asks are on. */
+  announceAsk(ask: Ask): void {
+    void this.notifier?.askCreated(ask);
   }
 
   // ------------------------------------------------------------- sessions
@@ -219,6 +245,7 @@ export class Cue {
       subjectId: ask.id,
       summary: `${askedBy} asked (${ask.kind}): ${truncate(ask.summary, 140)}`,
     });
+    this.announceAsk(ask);
     return ask;
   }
 

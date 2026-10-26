@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { parseDocument } from 'yaml';
 import { SEVERITIES, STAGES, type Severity, type Stage } from '../store/types.ts';
 import { DEFAULT_RANKING, PRESETS, PRESET_NAMES, TIERS, type Tier } from './presets.ts';
-import type { CueConfig, GithubSourceConfig, McpSourceConfig, RawRule, ResourceConfig, Rule, SourceConfig, StageMap } from './types.ts';
+import type { CueConfig, GithubSourceConfig, McpSourceConfig, NotifyConfig, RawRule, ResourceConfig, Rule, SourceConfig, StageMap } from './types.ts';
 import { DAY, HOUR, MINUTE, parseClockTime } from '../util/time.ts';
 
 export * from './types.ts';
@@ -372,7 +372,7 @@ export function buildConfig(raw: unknown, opts: BuildOptions = {}): CueConfig {
   const c = new Checker();
   const file = opts.configPath ?? null;
   if (!c.isObj(raw)) throw new ConfigError([`expected a YAML mapping at the top level, got ${describe(raw)}`], file);
-  c.keys(raw, '', ['project', 'preset', 'sources', 'resources', 'rules', 'quietHours', 'ranking', 'port', 'db', 'pollMinutes']);
+  c.keys(raw, '', ['project', 'preset', 'sources', 'resources', 'rules', 'quietHours', 'notify', 'ranking', 'port', 'db', 'pollMinutes']);
 
   const project = c.str(raw, 'project', '', { required: true }) ?? 'cue';
   const preset = c.str(raw, 'preset', '');
@@ -462,6 +462,45 @@ export function buildConfig(raw: unknown, opts: BuildOptions = {}): CueConfig {
     }
   }
 
+  // Phone alerts
+  let notify: CueConfig['notify'] = null;
+  if (raw.notify !== undefined && raw.notify !== null) {
+    const n = c.obj(raw.notify, 'notify');
+    if (n) {
+      c.keys(n, 'notify', ['ntfy', 'on', 'details']);
+      let ntfy: NotifyConfig['ntfy'] | null = null;
+      if (n.ntfy === undefined || n.ntfy === null) c.add('notify.ntfy', 'required (ntfy is the only alert channel so far)');
+      const t = n.ntfy === undefined || n.ntfy === null ? null : c.obj(n.ntfy, 'notify.ntfy');
+      if (t) {
+        c.keys(t, 'notify.ntfy', ['server', 'topic', 'tokenEnv']);
+        const serverText = c.str(t, 'server', 'notify.ntfy', { pattern: /^https?:\/\/[^\s/]+(\/[^\s]*)?$/i, patternHint: 'expected a URL like https://ntfy.sh' });
+        const server = (serverText ?? 'https://ntfy.sh').replace(/\/+$/, '');
+        const topic = c.str(t, 'topic', 'notify.ntfy', { required: true, pattern: /^[A-Za-z0-9_-]{1,64}$/, patternHint: 'expected letters, digits, - or _ (at most 64)' });
+        const tokenEnv = c.envName(t, 'tokenEnv', 'notify.ntfy');
+        if (topic && /^https:\/\/ntfy\.sh$/i.test(server) && topic.length < 12) {
+          c.add('notify.ntfy.topic', 'on the public ntfy.sh server anyone who guesses the topic reads your alerts. Use at least 12 random characters, e.g. cue-k3v9q2m7xa');
+        } else if (topic) {
+          ntfy = { server, topic, tokenEnv };
+        }
+      }
+      let on: NotifyConfig['on'] = ['urgent'];
+      if (n.on !== undefined) {
+        const list = c.strList(n.on, 'notify.on');
+        if (list) {
+          const bad = list.filter((x) => x !== 'urgent' && x !== 'asks');
+          if (bad.length) c.add('notify.on', `unknown value ${bad.join(', ')}. Use urgent and/or asks`);
+          else on = [...new Set(list)] as NotifyConfig['on'];
+        }
+      }
+      let details = true;
+      if (n.details !== undefined) {
+        if (typeof n.details === 'boolean') details = n.details;
+        else c.add('notify.details', `expected true or false, got ${describe(n.details)}`);
+      }
+      if (ntfy) notify = { ntfy, on, details };
+    }
+  }
+
   // Ranking
   const base = (preset && PRESETS[preset]?.ranking) || DEFAULT_RANKING;
   const ranking = { order: [...base.order], tags: [...base.tags] };
@@ -491,7 +530,7 @@ export function buildConfig(raw: unknown, opts: BuildOptions = {}): CueConfig {
   const db = dbRaw === ':memory:' ? ':memory:' : dbRaw ? (isAbsolute(dbRaw) ? dbRaw : resolve(baseDir, dbRaw)) : join(homedir(), '.cuedesk', `${slug}.sqlite`);
 
   if (c.problems.length) throw new ConfigError(c.problems, file);
-  return { project, preset, sources, resources, rules, quietHours, ranking, port, db, pollMinutes, configPath: opts.configPath ?? null };
+  return { project, preset, sources, resources, rules, quietHours, notify, ranking, port, db, pollMinutes, configPath: opts.configPath ?? null };
 }
 
 /** Parses YAML text and builds the config. YAML syntax errors name the line. */

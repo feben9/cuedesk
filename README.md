@@ -149,6 +149,34 @@ Every tool takes an optional `session` (an id or a short label such as `checkout
 
 **HTTP API.** Scripts get the same operations as JSON: `POST /api/<tool>` for any tool, `GET /api/<tool>` for the read-only ones (`/api/whats_next`, `/api/sessions`, `/api/since?ts=8h`), plus `/api/state` and the ask, signal and resource actions the UI uses. Name the session with a `session` field or an `X-Cue-Session` header.
 
+## Phone alerts
+
+Cue can push alerts to your phone through [ntfy](https://ntfy.sh), a free, open-source push service with Android and iOS apps. It's off until you add a `notify` section.
+
+1. Install the ntfy app and subscribe to a topic name you make up. Anyone who knows a topic on the public ntfy.sh server can read it, so make it long and random (Cue refuses topics shorter than 12 characters there).
+2. Add this to `cue.config.yaml`:
+
+   ```yaml
+   notify:
+     ntfy:
+       topic: cue-k3v9q2m7xa      # yours, long and random
+       # server: https://ntfy.example.org   # your own ntfy server (default https://ntfy.sh)
+       # tokenEnv: NTFY_TOKEN               # for a protected topic; the token stays in the environment
+     on: [urgent]                 # add "asks" for every new ask too
+     # details: false             # send only "something needs you", never titles or commands
+   ```
+
+3. Run `cuedesk notify test`. Your phone should buzz.
+
+What gets sent:
+
+| `on` | When | Priority |
+|---|---|---|
+| `urgent` (default) | an urgent signal fires, e.g. a session silent for 30 min while holding a device. Always, even in quiet hours. | top |
+| `asks` | a new ask, from an agent or a Claude Code permission prompt ("checkout-tests needs you: Claude wants to run: npm test"). Held during quiet hours. | high for approvals, normal otherwise |
+
+At most 6 alerts a minute; after that one "more are waiting" alert, then quiet until the minute is up. A failed send is tried three times, then logged; it never stops Cue.
+
 ## The UI
 
 - **Needs you:** asks and signals in one ranked list. Urgent signals and overdue asks come first, then asks from a session that holds a claim (a device sits idle until you answer), then the rest, oldest first. Presets reorder these tiers. Each card has its actions: Answer, Approve or Reject, Done, Dismiss, Snooze.
@@ -167,6 +195,7 @@ It refreshes every 5 seconds, follows your system's light or dark setting, and w
 - Secrets stay in environment variables. Config holds only their names; MCP source servers get only the env vars you list.
 - `hooks install` writes nothing unless you pass `--write <path>`, and then backs up the old file first.
 - Cue reads from your trackers and never writes to them in v0.1.
+- Phone alerts are the only thing Cue sends off your machine, and only when you add `notify`. They carry the card's title (the ask, or a command Claude wants to run) unless you set `details: false`.
 
 ## How it is built
 
@@ -196,7 +225,7 @@ npm run build        # compiles to dist/ for the package
 ## Roadmap
 
 - **v0.1 (this release):** core model and SQLite store; Claude Code hooks; MCP server; GitHub and generic MCP sources; rules engine; web UI with four views; demo mode; presets.
-- **v0.2:** Slack DM brief and urgent push, full quiet hours, approved tracker writes through the same MCP connectors, a promise tracker ("X said they'd do Y by Z").
+- **v0.2:** phone alerts through ntfy (done), approval cards that name the tool call (done), a Slack DM brief, full quiet hours, approved tracker writes through the same MCP connectors, a promise tracker ("X said they'd do Y by Z").
 - **v0.3:** a build desk (resumable, verified artifact downloads), a capacity forecast, and a decision log ("did I already decide this?").
 
 ## About me

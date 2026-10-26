@@ -56,6 +56,14 @@ export interface ResourceConfig {
   label: string;
 }
 
+export interface NotifyConfig {
+  ntfy: { server: string; topic: string; tokenEnv: string | null };
+  /** urgent: urgent signals (always, even in quiet hours). asks: every new ask, outside quiet hours. */
+  on: ('urgent' | 'asks')[];
+  /** false sends only "something needs you", never titles or commands. */
+  details: boolean;
+}
+
 export interface CueConfig {
   project: string;
   preset: string | null;
@@ -63,6 +71,7 @@ export interface CueConfig {
   resources: ResourceConfig[];
   rules: Rule[];
   quietHours: { start: string; end: string } | null;
+  notify: NotifyConfig | null;
   ranking: { order: Tier[]; tags: string[] };
   port: number;
   db: string;

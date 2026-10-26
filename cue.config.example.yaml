@@ -52,6 +52,15 @@ rules:
 
 quietHours: { start: "19:00", end: "08:00" }   # non-urgent signals wait for the brief
 
+# Phone alerts through ntfy (https://ntfy.sh). Off unless this section is here.
+# notify:
+#   ntfy:
+#     topic: cue-k3v9q2m7xa    # long and random: anyone who knows it can read it
+#     # server: https://ntfy.example.org
+#     # tokenEnv: NTFY_TOKEN
+#   on: [urgent]               # add "asks" for every new ask (held in quiet hours)
+#   # details: false           # send only "something needs you"
+
 # port: 4520                 # default 4520, on 127.0.0.1 only
 # pollMinutes: 5             # how often sources are read
 # db: ~/.cuedesk/my-app.sqlite
