@@ -1,0 +1,43 @@
+#!/usr/bin/env node
+// Launcher. Runs the compiled build (dist/) when present, otherwise the
+// TypeScript source through Node's type stripping (a git checkout without a build).
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const args = process.argv.slice(2);
+
+function respawn(flags, entry) {
+  const child = spawn(process.execPath, [...flags, entry, ...args], { stdio: 'inherit' });
+  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig));
+  child.on('exit', (code, signal) => process.exit(signal ? 1 : (code ?? 1)));
+}
+
+// node:sqlite needs --experimental-sqlite before Node 22.13.
+const [major, minor] = process.versions.node.split('.').map(Number);
+const needsSqliteFlag = major === 22 && minor < 13;
+
+const dist = join(root, 'dist', 'cli.js');
+if (!existsSync(dist)) {
+  respawn(
+    ['--experimental-strip-types', '--disable-warning=ExperimentalWarning', ...(needsSqliteFlag ? ['--experimental-sqlite'] : [])],
+    join(root, 'src', 'cli.ts'),
+  );
+} else if (needsSqliteFlag && !process.execArgv.includes('--experimental-sqlite')) {
+  respawn(['--experimental-sqlite', '--disable-warning=ExperimentalWarning'], dist);
+} else {
+  // node:sqlite prints an ExperimentalWarning on load. It is expected; keep the terminal clean.
+  const emit = process.emitWarning;
+  process.emitWarning = function (warning, ...rest) {
+    const type = typeof rest[0] === 'string' ? rest[0] : rest[0]?.type;
+    if (type === 'ExperimentalWarning' && /SQLite/i.test(String(warning?.message ?? warning))) return;
+    return emit.call(process, warning, ...rest);
+  };
+  const { main } = await import(pathToFileURL(dist).href);
+  const code = await main(args);
+  process.exitCode = code;
+  // Let stdout drain, then make sure nothing left open keeps the process alive.
+  setTimeout(() => process.exit(code), 1000).unref();
+}

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Cue</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img src="favicon.svg" alt="" width="22" height="22">
+      <span class="name">Cue</span>
+      <span class="project" id="project"></span>
+    </div>
+    <div class="status">
+      <span class="dot" id="live-dot" aria-hidden="true"></span>
+      <span id="live-text">connecting…</span>
+      <button type="button" class="btn small ghost" id="sync-btn" title="Read every source now">Sync</button>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Views">
+    <a href="#needs" data-view="needs">Needs you <span class="count" id="needs-count">0</span></a>
+    <a href="#now" data-view="now">Now</a>
+    <a href="#board" data-view="board">Board<span class="hide-sm"> watch</span></a>
+    <a href="#since" data-view="since">Since<span class="hide-sm"> you left</span></a>
+  </nav>
+
+  <main>
+    <section id="view-needs" class="view" aria-labelledby="needs-h">
+      <div class="view-head">
+        <h1 id="needs-h">Needs you</h1>
+        <p class="sub" id="needs-sub"></p>
+      </div>
+      <ol class="cards" id="needs-list"></ol>
+      <details class="held" id="held" hidden>
+        <summary id="held-summary"></summary>
+        <ol class="cards" id="held-list"></ol>
+      </details>
+    </section>
+
+    <section id="view-now" class="view" aria-labelledby="now-h" hidden>
+      <div class="view-head">
+        <h1 id="now-h">Now</h1>
+        <p class="sub">Sessions, what they are doing, and who holds each shared resource.</p>
+      </div>
+      <h2>Sessions</h2>
+      <div class="grid" id="sessions"></div>
+      <h2>Resources</h2>
+      <div class="resources" id="resources"></div>
+    </section>
+
+    <section id="view-board" class="view" aria-labelledby="board-h" hidden>
+      <div class="view-head">
+        <h1 id="board-h">Board watch</h1>
+        <p class="sub" id="board-sub"></p>
+      </div>
+      <div class="columns" id="columns"></div>
+      <h2>Watching for</h2>
+      <ul class="rules" id="rules"></ul>
+    </section>
+
+    <section id="view-since" class="view" aria-labelledby="since-h" hidden>
+      <div class="view-head">
+        <h1 id="since-h">Since you left</h1>
+        <p class="sub">A summary built from everything Cue logged since a time you choose.</p>
+      </div>
+      <form class="since-controls" id="since-form">
+        <div class="chips" role="group" aria-label="Quick ranges">
+          <button type="button" class="btn small" data-since="last">Last visit</button>
+          <button type="button" class="btn small" data-since="1h">1 hour</button>
+          <button type="button" class="btn small" data-since="8h">8 hours</button>
+          <button type="button" class="btn small" data-since="24h">24 hours</button>
+        </div>
+        <label class="field">
+          <span>From</span>
+          <input type="datetime-local" id="since-input">
+        </label>
+        <button type="submit" class="btn small primary">Show</button>
+      </form>
+      <div class="brief" id="brief"></div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

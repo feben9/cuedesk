@@ -1,0 +1,55 @@
+{
+  "name": "cuedesk",
+  "version": "0.1.0",
+  "description": "Cue: a local-first chief of staff for one person running many AI agent sessions and a ticket board.",
+  "keywords": [
+    "ai-agents",
+    "claude-code",
+    "mcp",
+    "model-context-protocol",
+    "chief-of-staff",
+    "local-first",
+    "qa"
+  ],
+  "author": "Feben Tibebe",
+  "license": "MIT",
+  "homepage": "https://github.com/feben9/cuedesk#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/feben9/cuedesk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/feben9/cuedesk/issues"
+  },
+  "type": "module",
+  "bin": {
+    "cuedesk": "bin/cuedesk"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "ui/",
+    "cue.config.example.yaml",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/cli.ts",
+    "demo": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/cli.ts --demo",
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test --test-concurrency=1 \"tests/**/*.test.ts\"",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3"
+  }
+}

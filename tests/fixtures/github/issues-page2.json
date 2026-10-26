@@ -1,0 +1,26 @@
+[
+  {
+    "url": "https://api.github.com/repos/acme/widgets/issues/9",
+    "html_url": "https://github.com/acme/widgets/issues/9",
+    "number": 9,
+    "title": "Docs: explain the stage mapping",
+    "state": "open",
+    "labels": [{ "id": 3, "name": "docs" }],
+    "assignee": null,
+    "assignees": [],
+    "created_at": "2026-09-20T08:00:00Z",
+    "updated_at": "2026-09-21T09:00:00Z"
+  },
+  {
+    "url": "https://api.github.com/repos/acme/widgets/issues/11",
+    "html_url": "https://github.com/acme/widgets/issues/11",
+    "number": 11,
+    "title": "Add a dark theme",
+    "state": "open",
+    "labels": [],
+    "assignee": null,
+    "assignees": [{ "login": "leo-dev" }],
+    "created_at": "2026-09-25T08:00:00Z",
+    "updated_at": "2026-10-10T09:00:00Z"
+  }
+]

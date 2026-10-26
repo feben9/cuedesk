@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tgz
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.cuedesk/
+cue.config.yaml
+.DS_Store
+coverage/

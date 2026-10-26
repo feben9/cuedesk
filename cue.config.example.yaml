@@ -1,0 +1,57 @@
+# cue.config.yaml: copy this file, keep what you use, delete the rest.
+# Secrets never go here: name the environment variable that holds them.
+
+project: my-app
+preset: qa-lead            # qa-lead | eng-manager | solo-dev; rules below override it
+
+sources:
+  # Built in: open issues and pull requests of one GitHub repo.
+  - type: github
+    repo: owner/name
+    tokenEnv: GITHUB_TOKEN   # optional; public repos work without a token
+    stages:                  # optional: labels that put an item in a stage
+      blocked: ["blocked"]
+      active: ["in progress"]
+
+  # Any MCP server you already run (Jira, Linear, an in-house tracker).
+  - type: mcp
+    name: jira
+    command: ["npx", "-y", "some-jira-mcp"]   # or url: http://127.0.0.1:3000/mcp
+    env: [JIRA_API_TOKEN]                      # env vars passed to the server (names only)
+    query: { tool: search_issues, args: { jql: "project = APP AND status != Done" } }
+    map:                     # tracker fields → Cue item fields (dotted paths)
+      id: key
+      title: fields.summary
+      status: fields.status.name
+      updated: fields.updated
+      assignee: fields.assignee.displayName
+    urlTemplate: "https://your-site.example/browse/{id}"
+    stages:                  # tracker status names → Cue stages
+      active: ["In Progress", "In Testing"]
+      review: ["Code Review", "Ready for test"]
+      done: ["Done", "Tested"]
+
+resources:                   # things only one session should use at a time
+  - id: tablet-1
+    kind: device
+  - id: staging-config
+    kind: config
+
+rules:
+  - id: stale-active
+    when: { stage: active, idleHours: 24 }
+    severity: warn
+  - id: silent-claim
+    when: { session: holdsClaim, silentMinutes: 30 }
+    severity: urgent
+  - id: old-ask
+    when: { ask: open, ageHours: 2 }
+    severity: warn
+  # - id: stale-review        # turn off a preset rule
+  #   disabled: true
+
+quietHours: { start: "19:00", end: "08:00" }   # non-urgent signals wait for the brief
+
+# port: 4520                 # default 4520, on 127.0.0.1 only
+# pollMinutes: 5             # how often sources are read
+# db: ~/.cuedesk/my-app.sqlite
