@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { makeCue, postJson } from './helpers.ts';
-import { ingestClaudeHook } from '../src/ingest/hooks.ts';
+import { describeTool, ingestClaudeHook } from '../src/ingest/hooks.ts';
 import { HOOK_EVENTS, hooksSnippet, mergeHooks, writeHooks } from '../src/ingest/install.ts';
 import { startServer } from '../src/server/index.ts';
 import { CueError } from '../src/cue.ts';
@@ -54,6 +54,55 @@ test('Stop closes the asks the session raised and marks it idle', () => {
   assert.equal(store.getSession(SID)!.state, 'idle');
 });
 
+test('a permission prompt says which tool call it is for, and closes when the tool runs', () => {
+  const { cue, store } = makeCue();
+  ingestClaudeHook(cue, { ...common, hook_event_name: 'SessionStart', source: 'startup' });
+  ingestClaudeHook(cue, {
+    ...common,
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    tool_input: { command: 'npm run test:e2e -- --spec cart', description: 'Run the cart tests' },
+  });
+  assert.equal(store.getSession(SID)!.activity, 'Run: npm run test:e2e -- --spec cart', 'Now shows the tool call');
+
+  const r = ingestClaudeHook(cue, { ...common, hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Claude needs your permission' });
+  const ask = store.getAsk(r.askId!)!;
+  assert.equal(ask.kind, 'approve');
+  assert.equal(ask.summary, 'Claude wants to run: npm run test:e2e -- --spec cart');
+  assert.equal(ask.details, 'Run the cart tests\nClaude needs your permission');
+
+  const post = ingestClaudeHook(cue, { ...common, hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: {} });
+  assert.equal(post.closedAsks, 1);
+  assert.equal(store.getAsk(ask.id)!.answer, '(approved in the terminal)');
+  assert.ok(store.eventsSince(0).some((e) => e.type === 'ask.answered' && /approved in the terminal/.test(e.summary)));
+
+  // A tool call that needed no permission explains nothing later on.
+  ingestClaudeHook(cue, { ...common, hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: '/home/me/code/shop-app/README.md' } });
+  ingestClaudeHook(cue, { ...common, hook_event_name: 'PostToolUse', tool_name: 'Read', tool_input: {} });
+  const idle = ingestClaudeHook(cue, { ...common, hook_event_name: 'Notification', notification_type: 'idle_prompt', message: 'Claude is waiting for your input' });
+  assert.equal(store.getAsk(idle.askId!)!.summary, 'Claude is waiting for your input');
+});
+
+test('a permission prompt without a recent tool call keeps the plain message', () => {
+  const { cue, clock, store } = makeCue();
+  ingestClaudeHook(cue, { ...common, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls' } });
+  clock.advance(3 * 60_000); // too long ago to be what the prompt is about
+  const r = ingestClaudeHook(cue, { ...common, hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Claude needs your permission' });
+  assert.equal(store.getAsk(r.askId!)!.summary, 'Claude needs your permission');
+  assert.equal(store.getAsk(r.askId!)!.details, null);
+});
+
+test('describeTool names the common tools in a few words', () => {
+  assert.deepEqual(describeTool('Bash', { command: 'git   status\n  --short' }), { action: 'run: git status --short', purpose: null });
+  assert.equal(describeTool('Edit', { file_path: 'src/app.ts' }).action, 'edit src/app.ts');
+  assert.equal(describeTool('Write', { file_path: 'notes.txt' }).action, 'write notes.txt');
+  assert.equal(describeTool('WebFetch', { url: 'https://example.com/a' }).action, 'fetch https://example.com/a');
+  assert.equal(describeTool('WebSearch', { query: 'node sqlite' }).action, 'search the web for "node sqlite"');
+  assert.equal(describeTool('mcp__github__create_issue', { title: 'x' }).action, 'use github › create_issue');
+  assert.equal(describeTool('Task', {}).action, 'use Task');
+  assert.equal(describeTool('Bash', { command: 'x'.repeat(400) }).action.length, 'run: '.length + 160);
+});
+
 test('SessionEnd ends the session and releases its claims', () => {
   const { cue, store } = makeCue({ resources: [{ id: 'tablet-1' }] });
   ingestClaudeHook(cue, { ...common, hook_event_name: 'SessionStart' });
@@ -69,7 +118,7 @@ test('other hook events count as a heartbeat; bad payloads are refused', () => {
   const { cue, clock, store } = makeCue();
   ingestClaudeHook(cue, { ...common, hook_event_name: 'SessionStart' });
   clock.advance(10 * 60_000);
-  const r = ingestClaudeHook(cue, { ...common, hook_event_name: 'PostToolUse', tool_name: 'Bash' });
+  const r = ingestClaudeHook(cue, { ...common, hook_event_name: 'UserPromptSubmit', prompt: 'carry on' });
   assert.equal(r.ignored, true);
   assert.equal(store.getSession(SID)!.lastSeen, clock());
   assert.throws(() => ingestClaudeHook(cue, { hook_event_name: 'Stop' }), CueError);
@@ -90,7 +139,7 @@ test('POST /api/hooks/claude accepts what the curl hook sends', async (t) => {
   assert.match(bad.json().error, /session_id/);
 });
 
-test('hooks install: the snippet covers the four events and only prints', () => {
+test('hooks install: the snippet covers the six events and only prints', () => {
   const snippet = hooksSnippet(4520);
   assert.deepEqual(Object.keys(snippet.hooks), [...HOOK_EVENTS]);
   const cmd = snippet.hooks.Notification![0]!.hooks[0]!.command!;
@@ -132,7 +181,7 @@ test('hooks install --write: writes only the given file, with a backup', () => {
   assert.deepEqual(JSON.parse(readFileSync(r.backup!, 'utf8')), { theme: 'dark' });
   const written = JSON.parse(readFileSync(file, 'utf8'));
   assert.equal(written.theme, 'dark');
-  assert.equal(Object.keys(written.hooks).length, 4);
+  assert.equal(Object.keys(written.hooks).length, HOOK_EVENTS.length);
   const second = writeHooks(file, 4520);
   assert.equal(second.backup, null, 'no change, no rewrite');
 

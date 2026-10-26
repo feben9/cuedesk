@@ -106,7 +106,7 @@ Cue checks the whole file at start and lists every problem at once, with the pat
 
 ## Hooking up Claude Code
 
-**Hooks** tell Cue when a session starts, stops, ends, or waits for you.
+**Hooks** tell Cue when a session starts, stops, ends, waits for you, or runs a tool.
 
 ```sh
 cuedesk hooks install                    # prints the settings snippet; changes nothing
@@ -115,7 +115,7 @@ cuedesk hooks install --write ~/.claude/settings.json   # merges it in, keeps a 
 
 Paste the printed `hooks` block into your Claude Code settings (`~/.claude/settings.json` for all projects, or `.claude/settings.json` in one repo), or use `--write` with the file you choose. Each hook pipes its JSON to `POST /api/hooks/claude` with `curl`, gives up after 3 seconds and never fails, so a stopped Cue never blocks Claude Code.
 
-Checked with a real Claude Code session (v2.1): starting a session, a permission prompt (it shows up in Needs you as an approval within a second), finishing a turn, and ending the session all reach Cue. Declining the prompt in the terminal closes the card on its own.
+Checked with a real Claude Code session (v2.1): starting a session, a permission prompt (it shows up in Needs you within a second as "Claude wants to run: …"), finishing a turn, and ending the session all reach Cue. Approving or declining the prompt in the terminal closes the card on its own.
 
 | Hook | What Cue does |
 |---|---|
@@ -123,6 +123,10 @@ Checked with a real Claude Code session (v2.1): starting a session, a permission
 | `Notification` | opens an ask: permission prompts become approvals, idle prompts become questions |
 | `Stop` | marks the session idle and closes the asks it raised (you handled them in the terminal) |
 | `SessionEnd` | ends the session and releases any resources it still holds |
+| `PreToolUse` | remembers the tool call, so a permission prompt reads "Claude wants to run: npm test" instead of "Claude needs your permission"; Now shows it as the session's activity |
+| `PostToolUse` | the tool ran, so its permission prompt was approved: the card closes straight away |
+
+`PreToolUse` and `PostToolUse` fire on every tool call. With Cue running locally each one costs a few milliseconds, and the command, file path or URL stays on your machine in Cue's SQLite file.
 
 **MCP tools** let a session ask you things, claim resources and report progress:
 

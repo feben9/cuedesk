@@ -1,7 +1,10 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-export const HOOK_EVENTS = ['Notification', 'Stop', 'SessionStart', 'SessionEnd'] as const;
+// PreToolUse and PostToolUse let a permission prompt say what it is for, and
+// close it as soon as the tool runs. They fire on every tool call; with Cue
+// running locally each costs a few milliseconds.
+export const HOOK_EVENTS = ['Notification', 'Stop', 'SessionStart', 'SessionEnd', 'PreToolUse', 'PostToolUse'] as const;
 const MARKER = '/api/hooks/claude';
 
 interface HookCommand {
